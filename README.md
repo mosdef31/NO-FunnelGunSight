@@ -23,12 +23,6 @@ same time, no math required.
 2. Drop `FunnelGunSight.dll` + `wingspans.json` into `BepInEx/plugins/`.
 3. Launch — the funnel appears automatically when you select a gun weapon station.
 
-## Docs
-
-Full install/config reference: [`README.md`](./README.md)
-Architecture, ground-truth source findings, and tuning rationale:
-[`FunnelGunSight_Handoff_v1.0.0.md`](./FunnelGunSight_Handoff_v1.0.0.md)
-
 ## License
 
 MIT
