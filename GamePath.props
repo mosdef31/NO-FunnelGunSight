@@ -1,0 +1,20 @@
+<!--
+  ══════════════════════════════════════════════════════════════════════════════
+  GamePath.props — EDIT THIS FILE
+  ══════════════════════════════════════════════════════════════════════════════
+
+  Set GameDir to the root folder of your Nuclear Option install.
+  This is the folder that contains NuclearOption.exe.
+
+  To find it in Steam:
+    Right-click Nuclear Option → Manage → Browse local files
+
+  Examples:
+    <GameDir>D:\SteamLibrary\steamapps\common\Nuclear Option</GameDir>
+    <GameDir>C:\Games\Nuclear Option</GameDir>
+-->
+<Project>
+  <PropertyGroup>
+    <GameDir>PASTE PATH HERE</GameDir>
+  </PropertyGroup>
+</Project>

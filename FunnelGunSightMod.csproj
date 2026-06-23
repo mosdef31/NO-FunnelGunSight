@@ -1,0 +1,128 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- ── Game path — edit GamePath.props, not this file ────────────────────── -->
+  <Import Project="GamePath.props" />
+
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <AssemblyName>FunnelGunSightMod</AssemblyName>
+    <RootNamespace>FunnelGunSight</RootNamespace>
+    <Optimize>true</Optimize>
+    <NoWarn>1591</NoWarn>
+
+    <!-- Derived paths — do not edit -->
+    <BepInExDir>$(GameDir)\BepInEx</BepInExDir>
+    <BepInExCoreDir>$(BepInExDir)\core</BepInExCoreDir>
+    <ManagedDir>$(GameDir)\NuclearOption_Data\Managed</ManagedDir>
+    <PluginOutputDir>$(BepInExDir)\plugins\FunnelGunSight</PluginOutputDir>
+  </PropertyGroup>
+
+  <!-- ── Validate game path before attempting to resolve references ─────────── -->
+  <Target Name="ValidateGamePath" BeforeTargets="ResolveAssemblyReferences">
+    <Error
+      Condition="'$(GameDir)' == 'PASTE YOUR GAME PATH HERE' Or '$(GameDir)' == ''"
+      Text="GameDir is not set. Open GamePath.props and set it to your Nuclear Option install folder." />
+    <Error
+      Condition="!Exists('$(GameDir)\NuclearOption.exe')"
+      Text="NuclearOption.exe not found at '$(GameDir)'. Check the path in GamePath.props." />
+    <Error
+      Condition="!Exists('$(BepInExCoreDir)\BepInEx.dll')"
+      Text="BepInEx not found at '$(BepInExCoreDir)'. Confirm BepInEx is installed in the game folder." />
+  </Target>
+
+  <!-- ── References ─────────────────────────────────────────────────────────── -->
+  <ItemGroup>
+
+    <!-- BepInEx — BaseUnityPlugin, BepInPlugin, ConfigFile, ManualLogSource -->
+    <Reference Include="BepInEx">
+      <HintPath>$(BepInExCoreDir)\BepInEx.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- HarmonyX — 0Harmony.dll is the actual file; BepInEx.Harmony.dll is a separate shim -->
+    <Reference Include="0Harmony">
+      <HintPath>$(BepInExCoreDir)\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- Unity — MonoBehaviour, GameObject, Vector3, Camera, GL, etc. -->
+    <Reference Include="UnityEngine">
+      <HintPath>$(ManagedDir)\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(ManagedDir)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- Game assembly — Aircraft, WeaponStation, CombatHUD, FlightHud, etc. -->
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(ManagedDir)\Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- Mirage networking — Aircraft inherits NetworkBehaviour from here;
+         needed to resolve .transform, .gameObject, .rb on Aircraft -->
+    <Reference Include="Mirage">
+      <HintPath>$(ManagedDir)\Mirage.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- Unity physics — Rigidbody lives here, not in CoreModule -->
+    <Reference Include="UnityEngine.PhysicsModule">
+      <HintPath>$(ManagedDir)\UnityEngine.PhysicsModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- Unity IMGUI — Event and EventType used in FunnelRenderer.OnGUI -->
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>$(ManagedDir)\UnityEngine.IMGUIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- Unity UI (uGUI) — Image type, used to read HUDBoresightState's native
+         crosshair position so the funnel can anchor to it -->
+    <Reference Include="UnityEngine.UI">
+      <HintPath>$(ManagedDir)\UnityEngine.UI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- UI module — RectTransform/Canvas base types that UnityEngine.UI.dll
+         depends on -->
+    <Reference Include="UnityEngine.UIModule">
+      <HintPath>$(ManagedDir)\UnityEngine.UIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+  </ItemGroup>
+
+  <!-- ── Post-build deploy ──────────────────────────────────────────────────── -->
+  <PropertyGroup>
+    <DeployToGame>true</DeployToGame>
+  </PropertyGroup>
+
+  <Target Name="DeployToBepInEx" AfterTargets="Build" Condition="'$(DeployToGame)' == 'true'">
+
+    <MakeDir Directories="$(PluginOutputDir)" />
+
+    <Copy
+      SourceFiles="$(OutputPath)$(AssemblyName).dll"
+      DestinationFolder="$(PluginOutputDir)"
+      OverwriteReadOnlyFiles="true" />
+
+    <!-- Only copy wingspans.json on first deploy — preserves any edits you make in the game folder -->
+    <Copy
+      SourceFiles="$(ProjectDir)wingspans.json"
+      DestinationFolder="$(PluginOutputDir)"
+      OverwriteReadOnlyFiles="true"
+      Condition="Exists('$(ProjectDir)wingspans.json') And !Exists('$(PluginOutputDir)\wingspans.json')" />
+
+    <Message
+      Text="[FunnelGunSight] Deployed → $(PluginOutputDir)"
+      Importance="high" />
+
+  </Target>
+
+</Project>
