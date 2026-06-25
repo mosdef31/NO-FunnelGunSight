@@ -38,8 +38,17 @@ namespace FunnelGunSight
             if (!File.Exists(jsonPath))
             {
                 _logger.LogInfo(
-                    $"[FunnelGunSight] wingspans.json not found at '{jsonPath}'. " +
-                    "It will be created automatically as aircraft are encountered in Adaptive mode.");
+                    $"[FunnelGunSight] wingspans.json not found — creating seed file at '{jsonPath}'.");
+                try
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(jsonPath)!);
+                    File.WriteAllText(jsonPath, "{\n  \"wingspans\": {\n  }\n}\n");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(
+                        $"[FunnelGunSight] Could not create wingspans.json: {ex.Message}");
+                }
                 return;
             }
 
@@ -128,6 +137,13 @@ namespace FunnelGunSight
         public float GetWingspan(Unit target, float defaultWingspan)
         {
             if (target?.definition == null)
+                return defaultWingspan;
+
+            // Buildings, ships, and ground vehicles have a 'width' field just like
+            // aircraft, but it represents footprint/hull width — not a wingspan.
+            // Using it would make the funnel absurdly wide when locking a carrier or
+            // SAM site. Bail out immediately for any non-aircraft type.
+            if (target is Building || target is Ship || target is GroundVehicle)
                 return defaultWingspan;
 
             string jsonKey = target.definition.jsonKey?.ToLowerInvariant() ?? string.Empty;

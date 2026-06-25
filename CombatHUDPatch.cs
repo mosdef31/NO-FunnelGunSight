@@ -5,21 +5,30 @@ using UnityEngine;
 namespace FunnelGunSight
 {
     /// <summary>
-    /// Harmony postfix patch on <see cref="CombatHUD.ShowWeaponStation"/>.
-    /// Injects a <see cref="FunnelGunSight"/> component when a gun station is selected,
+    /// Harmony patches on <see cref="CombatHUD"/> and <see cref="HUDBoresightState"/>.
+    ///
+    /// CombatHUD.ShowWeaponStation — injects the funnel when a gun station is selected
     /// and destroys any previous instance when the player switches stations.
+    ///
+    /// HUDBoresightState.UpdateWeaponDisplay / HUDFixedUpdate — suppressed entirely
+    /// (return false = skip original) while the funnel is active and HideNativeBoresight
+    /// is on. This is the only reliable way to hide the native pip: the methods run every
+    /// frame and reassign Image positions/colors, so setting Image.enabled = false once
+    /// at injection time gets overwritten immediately on the next frame.
     /// </summary>
     [HarmonyPatch(typeof(CombatHUD), nameof(CombatHUD.ShowWeaponStation))]
     public static class CombatHUDPatch
     {
-        // ── State tracking ─────────────────────────────────────────────────────
+        // ── Funnel state ───────────────────────────────────────────────────────
         private static WeaponStation? _currentStation;
         private static GameObject?    _currentFunnelGO;
 
-        // Stored so RequestReinit() can re-run the injection without waiting for
-        // the next ShowWeaponStation call from the game.
         private static CombatHUD?     _lastHud;
         private static WeaponStation? _lastStation;
+
+        // ── Public ─────────────────────────────────────────────────────────────
+
+        public static bool FunnelActive => _currentFunnelGO != null;
 
         // ── Patch ──────────────────────────────────────────────────────────────
 
@@ -141,5 +150,21 @@ namespace FunnelGunSight
                 _currentFunnelGO = null;
             }
         }
+
+        private static bool ShouldSuppressNativePip()
+        {
+            FunnelConfig? cfg = FunnelGunSightPlugin.Instance?.FunnelConfig;
+            return FunnelActive && (cfg?.HideNativeBoresight.Value ?? true);
+        }
+
+        // ── Native pip suppression patches ────────────────────────────────────
+
+        [HarmonyPatch(typeof(HUDBoresightState), nameof(HUDBoresightState.UpdateWeaponDisplay))]
+        [HarmonyPrefix]
+        private static bool SuppressUpdateWeaponDisplay() => !ShouldSuppressNativePip();
+
+        [HarmonyPatch(typeof(HUDBoresightState), nameof(HUDBoresightState.HUDFixedUpdate))]
+        [HarmonyPrefix]
+        private static bool SuppressHUDFixedUpdate() => !ShouldSuppressNativePip();
     }
 }

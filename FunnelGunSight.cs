@@ -148,20 +148,21 @@ namespace FunnelGunSight
                     }
 
                     // Tier 3 — closest hostile in boresight cone (wingspan only).
-                    if (primaryTarget == null)
+                // Disabled if EnableBoresightAutoTarget is off.
+                if (primaryTarget == null && (_config?.EnableBoresightAutoTarget.Value ?? true))
+                {
+                    float bestDot = Mathf.Cos(30f * Mathf.Deg2Rad);
+                    foreach (HUDUnitMarker m in markers)
                     {
-                        float bestDot = Mathf.Cos(30f * Mathf.Deg2Rad);
-                        foreach (HUDUnitMarker m in markers)
-                        {
-                            if (!(m.unit is Aircraft c) || c == _aircraft) continue;
-                            if (c.NetworkHQ == _aircraft.NetworkHQ)         continue;
+                        if (!(m.unit is Aircraft c) || c == _aircraft) continue;
+                        if (c.NetworkHQ == _aircraft.NetworkHQ)         continue;
 
-                            float dot = Vector3.Dot(
-                                (c.transform.position - _aircraft.transform.position).normalized,
-                                gunWorldDir);
-                            if (dot > bestDot) { bestDot = dot; primaryTarget = c; }
-                        }
+                        float dot = Vector3.Dot(
+                            (c.transform.position - _aircraft.transform.position).normalized,
+                            gunWorldDir);
+                        if (dot > bestDot) { bestDot = dot; primaryTarget = c; }
                     }
+                }
                 }
             }
 
@@ -188,7 +189,11 @@ namespace FunnelGunSight
             var angularVel = Vector3.zero;
             if (_aircraft.rb != null)
             {
-                angularVel = -_aircraft.rb.angularVelocity;
+                // Section 6 — FBW compatibility: InvertAngularVelocity wraps the
+                // negation so stock aircraft (or non-Firefly FBW mods) can disable it.
+                angularVel = _config.InvertAngularVelocity.Value
+                    ? -_aircraft.rb.angularVelocity
+                    : _aircraft.rb.angularVelocity;
             }
             else if (!_loggedRbNull)
             {
@@ -222,6 +227,10 @@ namespace FunnelGunSight
             // targets aren't a confirmed lock, same rule already applied to the
             // range dot above. Guarded by MinRangeMeters so point-blank range
             // can't blow up the division.
+            //
+            // Section 4 — range-based auto-blend: LOS rate is noisier at close
+            // range (ω = v_perp / r amplifies errors at small r). Weight ramps
+            // from 0 at LevelVMinRange to full LevelVBlendWeight at LevelVMaxRange.
             if (_config.EnableLevelV.Value && rangeTarget != null &&
                 rangeTarget.rb != null && _aircraft.rb != null)
             {
@@ -231,10 +240,17 @@ namespace FunnelGunSight
 
                 if (rangeSq > minR * minR)
                 {
-                    Vector3 relVel = rangeTarget.rb.velocity - _aircraft.rb.velocity;
+                    Vector3 relVel  = rangeTarget.rb.velocity - _aircraft.rb.velocity;
                     Vector3 losRate = -Vector3.Cross(relPos, relVel) / rangeSq;
-                    angularVel = Vector3.Lerp(
-                        angularVel, losRate, _config.LevelVBlendWeight.Value);
+
+                    float range      = Mathf.Sqrt(rangeSq);
+                    float autoWeight = Mathf.InverseLerp(
+                        _config.LevelVMinRange.Value,
+                        _config.LevelVMaxRange.Value,
+                        range);
+                    float blendWeight = _config.LevelVBlendWeight.Value * autoWeight;
+
+                    angularVel = Vector3.Lerp(angularVel, losRate, blendWeight);
                 }
             }
 
@@ -255,13 +271,18 @@ namespace FunnelGunSight
             angularVel = _smoothedAngularVel;
 
             // ── Spine sampling (world space, fixed to aircraft) ──────────────────
-            // Pure aircraft-relative math — no camera involved, so this is also
-            // unaffected by free-look either way.
+            // Section 2: pass aircraft velocity so Sample() can account for the
+            // bullet's inherited speed component.
+            // Section 3: pass WeaponInfo and BallisticSteps for Euler integration
+            // of drag and gravity per spine point.
             (Vector3 point, float range)[] spine = PlaneOfMotionSampler.Sample(
                 _aircraft.transform.position,
                 gunWorldDir,
                 _weaponStation.WeaponInfo.muzzleVelocity,
                 angularVel,
+                _aircraft.rb?.velocity ?? Vector3.zero,
+                _weaponStation.WeaponInfo,
+                _config.BallisticSteps.Value,
                 _config.TrajectoryPoints.Value,
                 _config.MinRangeMeters.Value,
                 _config.MaxRangeMeters.Value,
@@ -285,13 +306,11 @@ namespace FunnelGunSight
                                       + gunWorldDir * BoresightProjectionDistance;
             Vector3 bs3 = camera.WorldToScreenPoint(boresightWorld);
             var     ourBoresightScreen = new Vector2(bs3.x, bs3.y);
-            // Our own visibility check — intentionally NOT tied to the native
-            // boresight Image's .enabled flag. HUDBoresightState disables that
-            // Image whenever aircraft.gearDeployed is true (it swaps to a
-            // waterline symbol instead), which would otherwise make our funnel
-            // vanish any time the gear happens to be down for no reason relevant
-            // to gun-lead aiming.
-            bool crossVisible = bs3.z > 0f;
+
+            // Section 5 — gear-down hiding: match native boresight behaviour.
+            // Aircraft.gearDeployed is a public bool field.
+            bool gearDown     = _config.HideWithGearDown.Value && _aircraft.gearDeployed;
+            bool crossVisible = bs3.z > 0f && !gearDown;
 
             Vector2 correction = Vector2.zero;
             bool    nativeAnchorFound = false;
@@ -354,7 +373,7 @@ namespace FunnelGunSight
             if (!spineOk)
             {
                 _renderer?.SetDrawData(boresightScreen, null, null,
-                    isVisible: false, dotPos: null, dotRadius: 0f);
+                    isVisible: false, dotPos: null, dotRadius: 0f, inSolution: false);
                 return;
             }
 
@@ -416,6 +435,7 @@ namespace FunnelGunSight
             }
 
             // ── Range dot ───────────────────────────────────────────────────────
+            int      dotIdx    = -1;
             Vector2? dotPos    = null;
             float    dotRadius = 0f;
 
@@ -437,6 +457,7 @@ namespace FunnelGunSight
                             float halfPx = (wingspan * 0.5f / Mathf.Max(targetRange, 1f))
                                            * focalLengthPx;
                             dotRadius = halfPx * _config.RangeDotSize.Value;
+                            dotIdx    = i;
                             break;
                         }
                     }
@@ -447,12 +468,32 @@ namespace FunnelGunSight
                     float halfPx = (wingspan * 0.5f / Mathf.Max(spine[n - 1].range, 1f))
                                    * focalLengthPx;
                     dotRadius = halfPx * _config.RangeDotSize.Value;
+                    dotIdx    = n - 1;
                 }
                 // Inside MinRange: no dot — target too close to engage.
             }
 
+            // ── Section 1 — In-solution SHOOT cue ───────────────────────────────
+            // When a Tier 1/2 target is locked and the range dot has been placed,
+            // check whether the target's current screen position falls within the
+            // funnel walls at the dot's spine index. If so, signal inSolution so
+            // FunnelRenderer can flash the funnel to ShootCueColor.
+            bool inSolution = false;
+            if (_config.EnableShootCue.Value && rangeTarget != null &&
+                dotPos.HasValue && dotIdx >= 0)
+            {
+                Vector3 targetSP = camera.WorldToScreenPoint(rangeTarget.transform.position);
+                if (targetSP.z > 0f)
+                {
+                    var   targetScreen  = new Vector2(targetSP.x, targetSP.y) + totalOffset;
+                    float wallHalfWidth = Vector2.Distance(leftWall[dotIdx], rightWall[dotIdx]) * 0.5f;
+                    float distToSpine   = Vector2.Distance(targetScreen, screenArc[dotIdx]);
+                    inSolution = distToSpine < wallHalfWidth;
+                }
+            }
+
             _renderer?.SetDrawData(boresightScreen, leftWall, rightWall,
-                isVisible: crossVisible, dotPos, dotRadius);
+                isVisible: crossVisible, dotPos, dotRadius, inSolution);
         }
     }
 }

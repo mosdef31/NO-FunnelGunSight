@@ -14,6 +14,7 @@ namespace FunnelGunSight
         private bool       _hasData;
         private Vector2?   _dotPos;
         private float      _dotRadius;
+        private bool       _inSolution;
 
         private const int CircleSegments = 16;
 
@@ -57,7 +58,8 @@ namespace FunnelGunSight
             Vector2[]? rightWall,
             bool       isVisible,
             Vector2?   dotPos,
-            float      dotRadius)
+            float      dotRadius,
+            bool       inSolution)
         {
             _gunCrossScreen = gunCrossScreen;
             _leftWall       = leftWall;
@@ -65,6 +67,7 @@ namespace FunnelGunSight
             _isVisible      = isVisible;
             _dotPos         = dotPos;
             _dotRadius      = dotRadius;
+            _inSolution     = inSolution;
             _hasData        = true;
         }
 
@@ -78,7 +81,23 @@ namespace FunnelGunSight
 
             FunnelConfig? cfg = FunnelGunSightPlugin.Instance?.FunnelConfig;
             float opacity = cfg?.FunnelOpacity.Value ?? 1f;
-            var   color   = new Color(0f, 1f, 0f, opacity);
+
+            // Section 1 — shoot cue: override base color when in solution.
+            Color baseCol = (cfg?.EnableShootCue.Value ?? false) && _inSolution
+                ? (cfg?.ShootCueColor.Value ?? Color.white)
+                : (cfg?.FunnelColor.Value   ?? Color.gray);
+
+            var color = new Color(baseCol.r, baseCol.g, baseCol.b, opacity);
+
+            // Section 7 — linear color space fix:
+            // Unity UI components automatically gamma-correct their color property
+            // before sending to the GPU. GL.Color() receives the raw value and does
+            // NOT apply that correction, so Color.green looks brighter/different
+            // from native HUD elements when both use (0,1,0). Converting to linear
+            // here makes GL output match Unity UI rendering visually.
+            Color glColor = QualitySettings.activeColorSpace == ColorSpace.Linear
+                ? color.linear
+                : color;
 
             try
             {
@@ -86,7 +105,7 @@ namespace FunnelGunSight
                 GL.LoadPixelMatrix();
                 _material.SetPass(0);
                 GL.Begin(GL.LINES);
-                GL.Color(color);
+                GL.Color(glColor);
 
                 if (cfg?.ShowGunCross.Value ?? true)
                     DrawCross(_gunCrossScreen, cfg?.GunCrossSize.Value ?? 8f);
