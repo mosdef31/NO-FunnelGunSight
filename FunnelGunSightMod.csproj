@@ -63,6 +63,22 @@
       <Private>false</Private>
     </Reference>
 
+    <!-- [NEW 0.33.4] FirstPass assembly — Rewired input, TrackIR, and other
+         scripts compiled before the main game assembly. Required transitively
+         because several 0.33.4 types now inherit from classes in this assembly. -->
+    <Reference Include="Assembly-CSharp-firstpass">
+      <HintPath>$(ManagedDir)\Assembly-CSharp-firstpass.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- [NEW 0.33.4] UniTask — async/await helper used by Gun, Weapon, and
+         other game classes. Required so the compiler can resolve return types
+         when we reference those classes (e.g. Gun via reflection). -->
+    <Reference Include="UniTask">
+      <HintPath>$(ManagedDir)\UniTask.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
     <!-- Mirage networking — Aircraft inherits NetworkBehaviour from here;
          needed to resolve .transform, .gameObject, .rb on Aircraft -->
     <Reference Include="Mirage">

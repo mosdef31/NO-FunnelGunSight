@@ -7,7 +7,7 @@ using HarmonyLib;
 
 namespace FunnelGunSight
 {
-    [BepInPlugin("com.funnelgunsight.mod", "FunnelGunSight", "1.0.2")]
+    [BepInPlugin("com.funnelgunsight.mod", "FunnelGunSight", "1.0.4")]
     [BepInProcess("NuclearOption.exe")]
     public class FunnelGunSightPlugin : BaseUnityPlugin
     {
@@ -57,7 +57,7 @@ namespace FunnelGunSight
             try
             {
                 if (FunnelConfig == null) return;
-                if (FunnelConfig.ForceReinitKey.Value.IsDown())
+                if (FunnelConfig.ResetOverlayKey.Value.IsDown())
                     CombatHUDPatch.RequestReinit();
             }
             catch (Exception ex)

@@ -82,39 +82,41 @@ namespace FunnelGunSight
             FunnelConfig? cfg = FunnelGunSightPlugin.Instance?.FunnelConfig;
             float opacity = cfg?.FunnelOpacity.Value ?? 1f;
 
-            // Section 1 — shoot cue: override base color when in solution.
-            Color baseCol = (cfg?.EnableShootCue.Value ?? false) && _inSolution
-                ? (cfg?.ShootCueColor.Value ?? Color.white)
-                : (cfg?.FunnelColor.Value   ?? Color.gray);
+            Color baseCol = (cfg?.FlashOnFiringSolution.Value ?? false) && _inSolution
+                ? (cfg?.FiringSolutionColor.Value ?? Color.white)
+                : (cfg?.FunnelColor.Value         ?? Color.gray);
 
             var color = new Color(baseCol.r, baseCol.g, baseCol.b, opacity);
 
-            // Section 7 — linear color space fix:
-            // Unity UI components automatically gamma-correct their color property
-            // before sending to the GPU. GL.Color() receives the raw value and does
-            // NOT apply that correction, so Color.green looks brighter/different
-            // from native HUD elements when both use (0,1,0). Converting to linear
-            // here makes GL output match Unity UI rendering visually.
+            // GL.Color() skips Unity's automatic gamma correction, so convert to
+            // linear manually to match native HUD colors in linear color space.
             Color glColor = QualitySettings.activeColorSpace == ColorSpace.Linear
                 ? color.linear
                 : color;
+
+            float lineThickness    = cfg?.FunnelLineThickness.Value   ?? 2f;
+            float dotLineThickness = cfg?.RangeDotLineThickness.Value ?? 2f;
 
             try
             {
                 GL.PushMatrix();
                 GL.LoadPixelMatrix();
                 _material.SetPass(0);
-                GL.Begin(GL.LINES);
+                GL.Begin(GL.TRIANGLES);
                 GL.Color(glColor);
 
-                if (cfg?.ShowGunCross.Value ?? true)
-                    DrawCross(_gunCrossScreen, cfg?.GunCrossSize.Value ?? 8f);
+                if (cfg?.ShowPipper.Value ?? true)
+                    DrawThickCross(_gunCrossScreen, cfg?.PipperSize.Value ?? 8f, lineThickness);
 
-                if (_leftWall  != null) DrawPolyline(_leftWall);
-                if (_rightWall != null) DrawPolyline(_rightWall);
+                if (_leftWall  != null) DrawThickPolyline(_leftWall,  lineThickness);
+                if (_rightWall != null) DrawThickPolyline(_rightWall, lineThickness);
 
                 if (_dotPos.HasValue && _dotRadius > 1f)
-                    DrawCircle(_dotPos.Value, _dotRadius);
+                {
+                    if (cfg?.RangeDotFilled.Value ?? false)
+                        DrawFilledCircle(_dotPos.Value, _dotRadius);
+                    DrawThickCircleRing(_dotPos.Value, _dotRadius, dotLineThickness);
+                }
 
                 GL.End();
                 GL.PopMatrix();
@@ -128,41 +130,82 @@ namespace FunnelGunSight
 
         // ── Primitives ─────────────────────────────────────────────────────────
         //
-        // All incoming coordinates come from Camera.WorldToScreenPoint, which
-        // measures Y from the BOTTOM of the screen (OpenGL convention).
-        // GL.LoadPixelMatrix() under URP on Windows/DX11 measures Y from the TOP
-        // (DirectX convention). X is identical in both systems — only Y is flipped.
-        // Fy() applies the one-line correction at every vertex so the rest of the
-        // codebase stays in WorldToScreenPoint space throughout.
+        // WorldToScreenPoint has (0,0) at bottom-left; GL.LoadPixelMatrix has (0,0)
+        // at top-left. Fy() converts. GL.LINES has no width control on most render
+        // backends, so thickness is built by hand as quads (two triangles each).
 
         private static float Fy(float y) => Screen.height - y;
 
-        private static void DrawCross(Vector2 c, float arm)
+        private static Vector2 ToGL(Vector2 p) => new Vector2(p.x, Fy(p.y));
+
+        private static void AddQuad(Vector2 a, Vector2 b, Vector2 c, Vector2 d)
         {
-            GL.Vertex3(c.x - arm, Fy(c.y),       0f);
-            GL.Vertex3(c.x + arm, Fy(c.y),       0f);
-            GL.Vertex3(c.x,       Fy(c.y) - arm, 0f);
-            GL.Vertex3(c.x,       Fy(c.y) + arm, 0f);
+            GL.Vertex3(a.x, a.y, 0f);
+            GL.Vertex3(b.x, b.y, 0f);
+            GL.Vertex3(c.x, c.y, 0f);
+
+            GL.Vertex3(a.x, a.y, 0f);
+            GL.Vertex3(c.x, c.y, 0f);
+            GL.Vertex3(d.x, d.y, 0f);
         }
 
-        private static void DrawPolyline(Vector2[] pts)
+        private static void DrawThickLineGL(Vector2 aGL, Vector2 bGL, float thickness)
+        {
+            Vector2 dir = bGL - aGL;
+            if (dir.sqrMagnitude < 0.0001f) return;
+            dir.Normalize();
+            Vector2 perp = new Vector2(-dir.y, dir.x) * (thickness * 0.5f);
+            AddQuad(aGL + perp, bGL + perp, bGL - perp, aGL - perp);
+        }
+
+        private static void DrawThickCross(Vector2 c, float arm, float thickness)
+        {
+            Vector2 cGL = ToGL(c);
+            DrawThickLineGL(
+                new Vector2(cGL.x - arm, cGL.y), new Vector2(cGL.x + arm, cGL.y), thickness);
+            DrawThickLineGL(
+                new Vector2(cGL.x, cGL.y - arm), new Vector2(cGL.x, cGL.y + arm), thickness);
+        }
+
+        private static void DrawThickPolyline(Vector2[] pts, float thickness)
         {
             for (int i = 0; i < pts.Length - 1; i++)
-            {
-                GL.Vertex3(pts[i].x,     Fy(pts[i].y),     0f);
-                GL.Vertex3(pts[i + 1].x, Fy(pts[i + 1].y), 0f);
-            }
+                DrawThickLineGL(ToGL(pts[i]), ToGL(pts[i + 1]), thickness);
         }
 
-        private static void DrawCircle(Vector2 c, float r)
+        private static void DrawFilledCircle(Vector2 c, float radius)
         {
-            float step = Mathf.PI * 2f / CircleSegments;
-            float cy   = Fy(c.y);
+            Vector2 cGL = ToGL(c);
+            float   step = Mathf.PI * 2f / CircleSegments;
+
             for (int i = 0; i < CircleSegments; i++)
             {
                 float a0 = i * step, a1 = (i + 1) * step;
-                GL.Vertex3(c.x + Mathf.Cos(a0) * r, cy + Mathf.Sin(a0) * r, 0f);
-                GL.Vertex3(c.x + Mathf.Cos(a1) * r, cy + Mathf.Sin(a1) * r, 0f);
+                Vector2 edgeA = cGL + new Vector2(Mathf.Cos(a0), Mathf.Sin(a0)) * radius;
+                Vector2 edgeB = cGL + new Vector2(Mathf.Cos(a1), Mathf.Sin(a1)) * radius;
+
+                GL.Vertex3(cGL.x, cGL.y, 0f);
+                GL.Vertex3(edgeA.x, edgeA.y, 0f);
+                GL.Vertex3(edgeB.x, edgeB.y, 0f);
+            }
+        }
+
+        private static void DrawThickCircleRing(Vector2 c, float radius, float thickness)
+        {
+            Vector2 cGL    = ToGL(c);
+            float   step   = Mathf.PI * 2f / CircleSegments;
+            float   rInner = Mathf.Max(radius - thickness * 0.5f, 0f);
+            float   rOuter = radius + thickness * 0.5f;
+
+            for (int i = 0; i < CircleSegments; i++)
+            {
+                float a0 = i * step, a1 = (i + 1) * step;
+                Vector2 dirA = new Vector2(Mathf.Cos(a0), Mathf.Sin(a0));
+                Vector2 dirB = new Vector2(Mathf.Cos(a1), Mathf.Sin(a1));
+
+                AddQuad(
+                    cGL + dirA * rOuter, cGL + dirB * rOuter,
+                    cGL + dirB * rInner, cGL + dirA * rInner);
             }
         }
     }

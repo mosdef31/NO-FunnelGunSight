@@ -4,18 +4,10 @@ using UnityEngine;
 
 namespace FunnelGunSight
 {
-    /// <summary>
-    /// Harmony patches on <see cref="CombatHUD"/> and <see cref="HUDBoresightState"/>.
-    ///
-    /// CombatHUD.ShowWeaponStation — injects the funnel when a gun station is selected
-    /// and destroys any previous instance when the player switches stations.
-    ///
-    /// HUDBoresightState.UpdateWeaponDisplay / HUDFixedUpdate — suppressed entirely
-    /// (return false = skip original) while the funnel is active and HideNativeBoresight
-    /// is on. This is the only reliable way to hide the native pip: the methods run every
-    /// frame and reassign Image positions/colors, so setting Image.enabled = false once
-    /// at injection time gets overwritten immediately on the next frame.
-    /// </summary>
+    // Injects the funnel on CombatHUD.ShowWeaponStation and suppresses the native
+    // pip via HUDBoresightState patches while HideNativeBoresight is on. The
+    // native pip methods run every frame and reassign Image state, so returning
+    // false from the prefix (skip original) is the only reliable way to hide it.
     [HarmonyPatch(typeof(CombatHUD), nameof(CombatHUD.ShowWeaponStation))]
     public static class CombatHUDPatch
     {
@@ -67,7 +59,7 @@ namespace FunnelGunSight
                 if (flightHud == null)
                 {
                     plugin.Logger.LogWarning(
-                        "[FunnelGunSight] FlightHud singleton not available — skipping injection.");
+                        "[FunnelGunSight] FlightHud singleton not available, skipping injection.");
                     return;
                 }
 
@@ -75,14 +67,14 @@ namespace FunnelGunSight
                 if (hudCenter == null)
                 {
                     plugin.Logger.LogWarning(
-                        "[FunnelGunSight] FlightHud HUDCenter not found — skipping injection.");
+                        "[FunnelGunSight] FlightHud HUDCenter not found, skipping injection.");
                     return;
                 }
 
                 if (__instance == null)
                 {
                     plugin.Logger.LogWarning(
-                        "[FunnelGunSight] CombatHUD instance is null — skipping injection.");
+                        "[FunnelGunSight] CombatHUD instance is null, skipping injection.");
                     return;
                 }
 
@@ -90,7 +82,7 @@ namespace FunnelGunSight
                 if (aircraft == null)
                 {
                     plugin.Logger.LogWarning(
-                        "[FunnelGunSight] CombatHUD.aircraft is null — skipping injection.");
+                        "[FunnelGunSight] CombatHUD.aircraft is null, skipping injection.");
                     return;
                 }
 
@@ -115,17 +107,13 @@ namespace FunnelGunSight
 
         // ── Public API ─────────────────────────────────────────────────────────
 
-        /// <summary>
-        /// Destroys the current funnel and immediately recreates it using the last
-        /// known HUD and weapon station.  Call this to recover from a stuck overlay
-        /// or after switching aircraft in a scenario.
-        /// </summary>
+        // Destroys and recreates the funnel using the last known HUD and station.
         public static void RequestReinit()
         {
             if (_lastHud == null || _lastStation == null)
             {
                 FunnelGunSightPlugin.Instance?.Logger.LogWarning(
-                    "[FunnelGunSight] RequestReinit: no previous HUD/station recorded — nothing to reinit.");
+                    "[FunnelGunSight] RequestReinit: no previous HUD/station recorded, nothing to reinit.");
                 return;
             }
 

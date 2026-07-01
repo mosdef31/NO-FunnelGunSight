@@ -8,14 +8,9 @@ using BepInEx.Logging;
 
 namespace FunnelGunSight
 {
-    /// <summary>
-    /// Loads wingspans.json from the mod folder and provides wingspan lookups by
-    /// unit definition key ("plane ID"). The database is self-populating: when
-    /// Adaptive mode encounters an aircraft that isn't in the file yet, its
-    /// wingspan is derived from the live game data (<see cref="UnitDefinition.width"/>)
-    /// and written back to wingspans.json under that aircraft's jsonKey, so the
-    /// dataset grows automatically just by playing — no manual data entry needed.
-    /// </summary>
+    // Loads wingspans.json and looks up wingspan by unit definition key. Missing
+    // aircraft are auto-derived from UnitDefinition.width and written back to
+    // wingspans.json, so the dataset grows automatically during play.
     public sealed class WingspanDatabase
     {
         private readonly Dictionary<string, float> _wingspans =
@@ -38,7 +33,7 @@ namespace FunnelGunSight
             if (!File.Exists(jsonPath))
             {
                 _logger.LogInfo(
-                    $"[FunnelGunSight] wingspans.json not found — creating seed file at '{jsonPath}'.");
+                    $"[FunnelGunSight] wingspans.json not found, creating seed file at '{jsonPath}'.");
                 try
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(jsonPath)!);
@@ -66,10 +61,7 @@ namespace FunnelGunSight
             }
         }
 
-        /// <summary>
-        /// Minimal, dependency-free parser for the format:
-        /// <c>{ "wingspans": { "key": float, ... } }</c>
-        /// </summary>
+        // Minimal parser for: { "wingspans": { "key": float, ... } }
         private void ParseWingspans(string json)
         {
             Match block = Regex.Match(json, @"""wingspans""\s*:\s*\{([^}]*)\}", RegexOptions.Singleline);
@@ -95,12 +87,8 @@ namespace FunnelGunSight
 
         // ── Persisting ─────────────────────────────────────────────────────────
 
-        /// <summary>
-        /// Rewrites wingspans.json from the current in-memory dataset, sorted by
-        /// key for readability. Called only when a new entry is auto-added, so
-        /// this runs at most once per newly-encountered aircraft type per session
-        /// — never every frame.
-        /// </summary>
+        // Rewrites wingspans.json, sorted by key. Runs at most once per
+        // newly-encountered aircraft type, never every frame.
         private void SaveToFile()
         {
             try
@@ -130,17 +118,14 @@ namespace FunnelGunSight
 
         // ── Lookup ────────────────────────────────────────────────────────────
 
-        /// <summary>
-        /// Returns the wingspan in metres for the given unit.
-        /// Lookup order: jsonKey → code → definition.width (auto-added) → defaultWingspan.
-        /// </summary>
+        // Lookup order: jsonKey -> code -> definition.width (auto-added) -> defaultWingspan.
         public float GetWingspan(Unit target, float defaultWingspan)
         {
             if (target?.definition == null)
                 return defaultWingspan;
 
             // Buildings, ships, and ground vehicles have a 'width' field just like
-            // aircraft, but it represents footprint/hull width — not a wingspan.
+            // aircraft, but it represents footprint/hull width, not a wingspan.
             // Using it would make the funnel absurdly wide when locking a carrier or
             // SAM site. Bail out immediately for any non-aircraft type.
             if (target is Building || target is Ship || target is GroundVehicle)
@@ -154,7 +139,7 @@ namespace FunnelGunSight
             if (!string.IsNullOrEmpty(code) && _wingspans.TryGetValue(code, out float byCode))
                 return byCode;
 
-            // Not in the database yet — derive from the live unit definition and
+            // Not in the database yet, derive from the live unit definition and
             // persist it under the canonical plane ID (jsonKey) so it's available
             // immediately next time, with zero manual data entry.
             float definitionWidth = target.definition.width;

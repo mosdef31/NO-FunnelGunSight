@@ -24,11 +24,8 @@ namespace FunnelGunSight
             maxRange       = Mathf.Max(maxRange, minRange + 1f);
             ballisticSteps = Mathf.Max(ballisticSteps, 1);
 
-            // Effective muzzle velocity includes the component of the aircraft's
-            // velocity along the gun direction (bullet inherits the aircraft's speed).
-            // At 600 km/h this changes time-of-flight at 1200 m by ~16%.
-            // Used for TOF (time of flight) only; raw muzzleVelocity is kept for
-            // the drag formula denominator since drag is relative to air, not ground.
+            // Bullet inherits aircraft velocity along the gun axis; raw
+            // muzzleVelocity is kept separately for the drag denominator.
             float effectiveMuzzleVel = Mathf.Max(
                 muzzleVelocity + Vector3.Dot(aircraftVelocity, gunWorldDir.normalized),
                 1f);
@@ -58,13 +55,11 @@ namespace FunnelGunSight
             {
                 float range = minRange + step * i;
 
-                // Ballistic integration: simulate the bullet with drag and gravity
-                // to get an accurate time-of-flight and the true aim direction that
-                // accounts for gravity droop.
+                // Simulate drag and gravity to get time-of-flight and aim direction.
                 Vector3 bulletPos = SimulateBullet(
                     gunWorldDir,
                     effectiveMuzzleVel,
-                    muzzleVelocity,   // raw — for drag denominator (air-relative)
+                    muzzleVelocity,   // raw, for drag denominator (air-relative)
                     dragCoef,
                     gravMult,
                     range,
@@ -73,9 +68,7 @@ namespace FunnelGunSight
 
                 float leadDeg = angSpeed * actualTof * Mathf.Rad2Deg;
 
-                // Use the gravity-corrected direction as the base, then rotate by
-                // the angular lead. bulletPos is in world space relative to muzzle
-                // (Vector3.zero), so its direction already encodes the gravity droop.
+                // bulletPos direction already includes gravity droop.
                 Vector3 baseDir = bulletPos.sqrMagnitude > 0.001f
                     ? bulletPos.normalized
                     : gunWorldDir.normalized;
@@ -88,12 +81,8 @@ namespace FunnelGunSight
             return results;
         }
 
-        /// <summary>
-        /// Euler-integrates a bullet's trajectory under drag and gravity and returns
-        /// the bullet's position (relative to the muzzle at the origin) at approximately
-        /// <paramref name="targetRange"/> metres. <paramref name="actualTof"/> is set to
-        /// the simulated time of flight.
-        /// </summary>
+        // Euler-integrates drag and gravity, returns bullet position relative
+        // to the muzzle at approximately targetRange metres, and time of flight.
         private static Vector3 SimulateBullet(
             Vector3 gunWorldDir,
             float   muzzleVelocity,     // effective (includes aircraft speed component)
