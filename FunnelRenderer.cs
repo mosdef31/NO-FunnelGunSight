@@ -82,11 +82,15 @@ namespace FunnelGunSight
             FunnelConfig? cfg = FunnelGunSightPlugin.Instance?.FunnelConfig;
             float opacity = cfg?.FunnelOpacity.Value ?? 1f;
 
+            // HudTheme returns either the live HUD theme colour or the configured
+            // override, depending on FollowHudTheme.
             Color baseCol = (cfg?.FlashOnFiringSolution.Value ?? false) && _inSolution
-                ? (cfg?.FiringSolutionColor.Value ?? Color.white)
-                : (cfg?.FunnelColor.Value         ?? Color.gray);
+                ? HudTheme.FiringSolution(cfg)
+                : HudTheme.Funnel(cfg);
 
-            var color = new Color(baseCol.r, baseCol.g, baseCol.b, opacity);
+            // Scale by the theme's own alpha rather than replacing it, so opacity
+            // stays a relative dimmer in both colour modes.
+            var color = new Color(baseCol.r, baseCol.g, baseCol.b, baseCol.a * opacity);
 
             // GL.Color() skips Unity's automatic gamma correction, so convert to
             // linear manually to match native HUD colors in linear color space.

@@ -125,7 +125,11 @@ namespace FunnelGunSight
                     }
 
                     // Tier 3 - closest hostile in boresight cone (wingspan only).
-                    if (primaryTarget == null && (_config?.AutoTargetNearestEnemy.Value ?? true))
+                    // _config is guaranteed non-null by the guard above; using `?.`
+                    // here made the compiler treat it as nullable again for the rest
+                    // of the method, which is where the CS8602 on the wingspan line
+                    // came from.
+                    if (primaryTarget == null && _config.AutoTargetNearestEnemy.Value)
                     {
                         float bestDot = Mathf.Cos(30f * Mathf.Deg2Rad);
                         foreach (HUDUnitMarker m in markers)

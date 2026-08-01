@@ -7,7 +7,7 @@ using HarmonyLib;
 
 namespace FunnelGunSight
 {
-    [BepInPlugin("com.funnelgunsight.mod", "FunnelGunSight", "1.0.4")]
+    [BepInPlugin("com.funnelgunsight.mod", "FunnelGunSight", "1.1.0")]
     [BepInProcess("NuclearOption.exe")]
     public class FunnelGunSightPlugin : BaseUnityPlugin
     {
