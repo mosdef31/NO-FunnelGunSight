@@ -198,6 +198,14 @@ Architecture, ballistics math, and the reasoning behind the design decisions:
 
 ---
 
+## AI use
+
+I use an AI agent to help with coding, refactoring, asset modification, and authoring
+long bodies of text and lore.
+
+It raises the quality ceiling beyond what my own skills currently guarantee, while I
+learn and develop them. Every decision, every number, and everything that ships is mine.
+
 ## License
 
 MIT — see [LICENSE](./LICENSE).
