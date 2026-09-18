@@ -2,34 +2,41 @@ using UnityEngine;
 
 namespace FunnelGunSight
 {
+    /// <summary>
+    /// The funnel's spine: for each range along the sight, where a target would have
+    /// to be for a round fired now to meet it, given how hard the aircraft is
+    /// turning.
+    ///
+    /// THE BULLET LAW ITSELF LIVES IN <see cref="Ballistics"/> AND IS NOT REPEATED
+    /// HERE. This file used to carry its own copy of the step, its own
+    /// `GameStep()` and its own iteration budget. Once the tracer line and the
+    /// ground sight started integrating the same round, two copies of the law were
+    /// two things that could drift, and the tracer line's whole value is that it
+    /// can be checked against the real tracers - which it cannot do if it is
+    /// integrating a different bullet from the walls beside it.
+    /// </summary>
     internal static class PlaneOfMotionSampler
     {
         public static (Vector3 point, float range)[] Sample(
-            Vector3    aircraftPosition,
-            Vector3    gunWorldDir,
-            float      muzzleVelocity,
-            Vector3    angularVelocityWorld,
-            Vector3    aircraftVelocity,
-            WeaponInfo weaponInfo,
-            int        ballisticSteps,
-            int        pointCount,
-            float      minRange,
-            float      maxRange,
-            float      minAngularRate,
-            out Vector3 angAxisUsed)
+            Vector3              aircraftPosition,
+            Vector3              gunWorldDir,
+            in Ballistics.Inputs inp,
+            Vector3              angularVelocityWorld,
+            Vector3              aircraftVelocity,
+            int                  ballisticSteps,
+            int                  pointCount,
+            float                minRange,
+            float                maxRange,
+            float                minAngularRate,
+            out Vector3          angAxisUsed)
         {
             pointCount     = Mathf.Max(pointCount, 2);
-            muzzleVelocity = Mathf.Max(muzzleVelocity, 1f);
             minRange       = Mathf.Max(minRange, 1f);
             maxRange       = Mathf.Max(maxRange, minRange + 1f);
             ballisticSteps = Mathf.Max(ballisticSteps, 1);
 
-            // A bullet leaves the muzzle with the aircraft's full velocity vector
-            // added, not just the component along the gun axis — Gun.Fire() passes
-            // `velocityInherit.velocity + muzzle.forward * muzzleVelocity` straight
-            // into BulletSim. Modelling only the along-axis part would miss the
-            // sideways drift produced by any AoA or sideslip.
-            Vector3 initialVelocity = gunWorldDir.normalized * muzzleVelocity + aircraftVelocity;
+            Vector3 initialVelocity =
+                Ballistics.LaunchVelocity(gunWorldDir, aircraftVelocity, in inp);
 
             float   angSpeed = angularVelocityWorld.magnitude;
             Vector3 angAxis;
@@ -49,91 +56,128 @@ namespace FunnelGunSight
             float rangeSpan = maxRange - minRange;
             float step      = rangeSpan / Mathf.Max(pointCount - 1, 1);
 
-            float dragCoef = weaponInfo?.dragCoef ?? 0f;
-            float gravMult = weaponInfo?.gravMult  ?? 1f;
+            Vector3 gunDirNorm = gunWorldDir.normalized;
+
+            // Pass 1: one sweep down the gun line records the time of flight to every
+            // spine range at once. The ranges ascend, so a single integration passes
+            // through all of them in order - running `pointCount` separate simulations
+            // of the same trajectory was pure waste.
+            var tof = new float[pointCount];
+            SweepTimesOfFlight(
+                initialVelocity, in inp, minRange, step, pointCount, ballisticSteps, tof);
 
             for (int i = 0; i < pointCount; i++)
             {
-                float range = minRange + step * i;
+                float range     = minRange + step * i;
+                float actualTof = tof[i];
 
-                // Simulate drag and gravity to get time-of-flight and aim direction.
+                // The round arriving at this range now was fired `actualTof` ago,
+                // when the gun pointed `angSpeed * actualTof` back along the turn.
+                // Rotate the *firing conditions* rather than the finished
+                // trajectory: gravity is world-vertical and does not turn with the
+                // aircraft, so rotating a drooped vector swings the droop sideways
+                // by the lead angle and pushes the spine off the tracer stream -
+                // a few milliradians at 1200 m, which is the far end's whole wall
+                // half-width. The inherited velocity *does* rotate with the
+                // airframe through a turn, so it is carried along.
+                Quaternion lead       = Quaternion.AngleAxis(angSpeed * actualTof * Mathf.Rad2Deg, angAxis);
+                Vector3    leadGunDir = lead * gunDirNorm;
+                Vector3    leadVel    = lead * aircraftVelocity;
+
                 Vector3 bulletPos = SimulateBullet(
-                    initialVelocity,
-                    muzzleVelocity,   // raw, air-relative, for the drag denominator
-                    dragCoef,
-                    gravMult,
+                    leadGunDir * inp.LaunchSpeed + leadVel,
+                    in inp,
                     range,
                     ballisticSteps,
-                    out float actualTof);
+                    out float _);
 
-                float leadDeg = angSpeed * actualTof * Mathf.Rad2Deg;
-
-                // bulletPos direction already includes gravity droop.
+                // Gravity droop is now world-vertical, applied after the rotation.
                 Vector3 baseDir = bulletPos.sqrMagnitude > 0.001f
                     ? bulletPos.normalized
-                    : gunWorldDir.normalized;
+                    : leadGunDir;
 
-                Vector3 leadDir = Quaternion.AngleAxis(leadDeg, angAxis) * baseDir;
-                results[i] = (aircraftPosition + leadDir.normalized * range, range);
+                results[i] = (aircraftPosition + baseDir * range, range);
             }
 
             angAxisUsed = angAxis;
             return results;
         }
 
-        // Euler-integrates drag and gravity using the game's own bullet law
-        // (BulletSim.Bullet.TrajectoryTrace), and returns the bullet's position
-        // relative to the muzzle at exactly targetRange metres, plus the time of
-        // flight to get there.
-        //
-        // The integration runs until the range is actually reached rather than for
-        // a fixed number of steps. An earlier version sized `dt` from the drag-free
-        // flight time and then ran exactly `steps` iterations, so the loop always
-        // ran out of budget before covering targetRange and reported a time of
-        // flight equal to targetRange / muzzleVelocity — the drag-free time. Since
-        // lead angle is directly proportional to time of flight, that underestimate
-        // became a systematic underlead, reaching 31% at 1200 m with the draggier
-        // cannons.
+        // Integrates once along the gun line and fills `tof` with the time of flight
+        // to each of `count` ranges starting at `minRange` and spaced `step` apart.
+        private static void SweepTimesOfFlight(
+            Vector3              initialVelocity,
+            in Ballistics.Inputs inp,
+            float                minRange,
+            float                step,
+            int                  count,
+            int                  steps,
+            float[]              tof)
+        {
+            Vector3 vel = initialVelocity;
+            Vector3 pos = Vector3.zero;
+            float   t   = 0f;
+            float   dt  = Ballistics.GameStep();
+
+            float maxRange = minRange + step * (count - 1);
+            int   budget   = Ballistics.IterationBudget(
+                initialVelocity.magnitude, in inp, maxRange, steps, dt);
+
+            int next = 0;
+
+            for (int s = 0; s < budget && next < count; s++)
+            {
+                float distPrev = pos.magnitude;
+
+                Ballistics.Step(ref vel, ref pos, dt, in inp);
+
+                float dist = pos.magnitude;
+                float span = dist - distPrev;
+
+                // One step can cross several spine ranges when they are closely spaced.
+                while (next < count)
+                {
+                    float wanted = minRange + step * next;
+                    if (dist < wanted) break;
+
+                    float f = span > 1e-6f ? Mathf.Clamp01((wanted - distPrev) / span) : 1f;
+                    tof[next] = t + dt * f;
+                    next++;
+                }
+
+                t += dt;
+            }
+
+            // Anything the integration never reached - a very short-ranged round, or
+            // the budget running out - keeps the last solved time rather than zero,
+            // which would collapse the far end of the funnel onto the boresight.
+            float last = next > 0 ? tof[next - 1] : t;
+            for (; next < count; next++) tof[next] = last;
+        }
+
+        // Returns the bullet's position relative to the muzzle at exactly
+        // `targetRange` metres, plus the time of flight to get there.
         private static Vector3 SimulateBullet(
-            Vector3 initialVelocity,
-            float   rawMuzzleVelocity,  // for drag formula denominator (air-relative)
-            float   dragCoef,
-            float   gravMult,
-            float   targetRange,
-            int     steps,
-            out float actualTof)
+            Vector3              initialVelocity,
+            in Ballistics.Inputs inp,
+            float                targetRange,
+            int                  steps,
+            out float            actualTof)
         {
             Vector3 vel = initialVelocity;
             Vector3 pos = Vector3.zero;
             actualTof   = 0f;
 
-            float speed0 = Mathf.Max(vel.magnitude, 1f);
+            float dt     = Ballistics.GameStep();
+            int   budget = Ballistics.IterationBudget(
+                vel.magnitude, in inp, targetRange, steps, dt);
 
-            // Closed-form time to cover targetRange under pure quadratic drag,
-            // used only to size the step so `steps` stays a meaningful resolution
-            // knob across weapons with very different drag coefficients:
-            //   dv/dt = -k v^2, k = dragCoef / muzzleVelocity
-            //   t(x)  = (e^(k x) - 1) / (v0 k)
-            // Falls back to the straight-line time when drag is negligible.
-            float k  = dragCoef / Mathf.Max(rawMuzzleVelocity, 1f);
-            float tEstimate = k > 1e-6f
-                ? (Mathf.Exp(Mathf.Min(k * targetRange, 10f)) - 1f) / (speed0 * k)
-                : targetRange / speed0;
-
-            float dt = Mathf.Max(tEstimate / steps, 1e-5f);
-
-            // The estimate ignores gravity and any inherited velocity, so allow
-            // headroom past `steps` before giving up.
-            int maxIterations = steps * 3;
-
-            for (int s = 0; s < maxIterations; s++)
+            for (int s = 0; s < budget; s++)
             {
                 Vector3 posPrev  = pos;
                 float   distPrev = posPrev.magnitude;
 
-                vel.y -= 9.81f * dt * gravMult;
-                vel   -= vel.sqrMagnitude * dragCoef * dt * vel.normalized / rawMuzzleVelocity;
-                pos   += vel * dt;
+                Ballistics.Step(ref vel, ref pos, dt, in inp);
 
                 float dist = pos.magnitude;
 

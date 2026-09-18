@@ -142,6 +142,70 @@ rate is applied as an additional rotation on top of that direction:
 leadDir = Quaternion.AngleAxis(leadDeg, turnAxis) * ballisticDirection
 ```
 
+### Which muzzle velocity, and why there are two of them
+
+`Gun.SpawnBullet` fires with the gun's own private `muzzleVelocity` FIELD:
+
+```csharp
+bulletSim.AddBullet(transform.transform, vector + transform.transform.forward * muzzleVelocity, ...)
+```
+
+`Gun.Awake` seeds that field from `info.muzzleVelocity`, and two things move it
+afterwards:
+
+- `Gun.LoadAmmunition(mount)` assigns `info = weaponMount.info`. It runs from
+  `AttachToHardpoint`, which is after `Awake`, so a gun fed from a `GunAmmo` mount
+  fires at the PREFAB's speed while carrying the MOUNT's `WeaponInfo`. Exactly four
+  assets in the stock game set `GunAmmo: 1` and all four are turret or ground
+  mounts, so no stock aircraft gun hits this. A modded aircraft is free to.
+- `Gun.Heat.Update` writes `muzzleVelocity = info.muzzleVelocity - velocityDegradation * overheatFactor`
+  as the barrel heats.
+
+Meanwhile `BulletSim.Bullet.TrajectoryTrace` divides the drag term by
+`info.muzzleVelocity` regardless. So the game itself uses two different numbers,
+and the funnel has to use both the same way: `FunnelGunSight.ResolveMuzzleVelocity`
+reads the field by reflection for the launch speed, and `PlaneOfMotionSampler`
+keeps `info.muzzleVelocity` as `dragDenom`.
+
+`WeaponStation.WeaponInfo` is a snapshot assigned at `RegisterWeapon` and
+`AssessAmmo` time. The funnel reads the weapon's own live `info` instead.
+
+### The step size is the game's, not ours
+
+`BulletSim.FixedUpdate` traces every bullet once per physics tick with
+`Time.fixedDeltaTime`. Explicit Euler on `dv/dt = -k v^2` at that step loses speed
+faster than the exact curve, because it applies the step-start speed across the
+whole step. So the game's own round is SLOWER than a finely integrated model of
+it, and arrives late:
+
+| Weapon | 500 m | 1000 m | 1200 m |
+|---|---|---|---|
+| 25 mm Autocannon | +0.84% | +1.00% | +1.06% |
+| 20 mm | +0.61% | +0.71% | +0.75% |
+| 30 mm Rotary | +0.34% | +0.38% | +0.39% |
+
+At 1200 m in a 10 deg/s pull the 25 mm figure is about 3.5 m of cross-range miss,
+most of a wall half-width at that range, and it scales with `dragCoef`, so a
+modded high-drag round suffers more than any stock one.
+
+The funnel therefore steps at `Time.fixedDeltaTime` too. Being more accurate than
+the thing you are predicting is a bug.
+
+`BallisticSimulationSteps` survives as the floor on the iteration budget only. It
+is no longer a resolution knob, because there is no resolution left to choose.
+
+### One sweep, not fifty
+
+Spine ranges ascend, so a single integration down the gun line passes through all
+of them in order. `SweepTimesOfFlight` records the interpolated time of flight at
+each range as it crosses it. The second pass, which rotates the firing conditions
+by each point's own lead angle, still runs per point, so the cost is 51 trajectory
+simulations a frame rather than 100.
+
+Verified offline against the previous per-point implementation: identical to the
+last float across all fifty points, and a deliberately broken sweep that drops the
+sub-step interpolation disagrees by up to 0.02 s, so the check discriminates.
+
 ### The native pip has the same bug
 
 `ControlsFilter.CalcAim` computes its lead time as
@@ -205,6 +269,19 @@ from A to B with thickness t, it offsets both points by a perpendicular
 vector of length t/2 in each direction. The range dot's outline is drawn the
 same way as a ring, using an inner and outer radius.
 
+Each wall is one continuous mitred strip, not a row of independent quads. Separate
+quads leave a wedge of unfilled pixels on the outside of every joint, which reads as
+a ragged line at 2 px and as a dashed one at 4 px where the wall bends hardest. At
+each interior point both adjoining segments share one offset along the bisector,
+scaled by `1/cos` of the half-angle so the edge stays the full half-thickness from
+both segments. The scale is capped at four times the half-thickness, and a joint
+sharper than about 75 degrees falls back to a square offset, because dividing by a
+cosine near zero inverts the offset and folds the strip through itself.
+
+The range circle's segment count follows its radius, roughly one segment per three
+pixels of circumference, between 12 and 72. A fixed sixteen was visibly a polygon on
+a close lock and wasted most of its triangles on a distant one.
+
 `FunnelLineThickness` controls the funnel walls and pipper cross.
 `RangeDotLineThickness` controls the range circle's outline, independently.
 
@@ -213,6 +290,25 @@ drawn first, then the same outline ring is drawn on top using
 `RangeDotLineThickness`, so the thickness setting stays meaningful in both
 modes: it's the full ring width when unfilled, and the edge width when
 filled.
+
+## Clipping behind the camera
+
+`Camera.WorldToScreenPoint` returns a mirrored, meaningless pixel for a point behind
+the camera, so such a point cannot be drawn. The funnel used to blank entirely when
+any one spine point failed that test, which meant the sight disappeared in an
+external view and in a hard pull at a wide field of view, exactly when it was being
+used hardest. `UpdateFunnel` now keeps the longest contiguous run of points with
+`z > 0` and draws only that. `FunnelRenderer.SetDrawData` takes an explicit
+`wallCount` because the wall arrays are pooled and grown, so their `Length` is not
+the point count.
+
+## Per-frame allocation
+
+`UpdateFunnel` allocated five arrays a frame: the spine, its times of flight, the
+projected arc and both walls. They are pooled now and grown only when
+`FunnelResolution` changes. The spine and time-of-flight arrays still allocate
+inside `PlaneOfMotionSampler`; pooling those means moving the sampler off `static`,
+which has not been done.
 
 ## Coordinate spaces
 

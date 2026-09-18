@@ -98,6 +98,15 @@
       <Private>false</Private>
     </Reference>
 
+    <!-- [NEW 1.2.0] Text rendering — TextAnchor and FontStyle, which GUIStyle's
+         own properties are typed as. Needed since the range readout draws text
+         through GUI.Label; GUIStyle itself lives in IMGUIModule but its font
+         enums do not. -->
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>$(ManagedDir)\UnityEngine.TextRenderingModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
     <!-- Unity UI (uGUI) — Image type, used to read HUDBoresightState's native
          crosshair position so the funnel can anchor to it -->
     <Reference Include="UnityEngine.UI">

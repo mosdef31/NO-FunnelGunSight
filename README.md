@@ -33,14 +33,14 @@ the same Enhanced Envelope Gun Sight idea the real F-16 uses, wired up to Nuclea
 Option's own flight model and weapon data.
 
 If you've locked a target, you also get a **range circle** on the funnel sitting
-at that target's actual distance — fill the circle, take the shot.
+at that target's actual distance - fill the circle, take the shot.
 
 ---
 
 ## Install
 
 **Using a mod manager?** FunnelGunSight is on
-[NOMNOM](https://github.com/KopterBuzz/NOMNOM). Search for it and hit install —
+[NOMNOM](https://github.com/KopterBuzz/NOMNOM). Search for it and hit install -
 you're done.
 
 **By hand:**
@@ -75,11 +75,33 @@ Funnel stuck or missing after an aircraft swap? Press **F9** to rebuild it.
 
 ---
 
+## New in 1.2.0: four sights, and they all work at once
+
+The funnel is no longer the only thing this mod draws. There is a **Sights**
+section in the settings with an independent switch for each, and turning one on
+never turns another off.
+
+- **Ground attack sight (CCIP)**, on by default. A pipper on the spot your rounds
+  meet terrain, water or a ship, solved through the same drag and gravity as the
+  funnel. It is drawn only when the gun line actually reaches something, so it
+  stays out of the way in level flight.
+- **Lead pipper (LCOS)**, off by default. One lead dot instead of the funnel's
+  fifty, for when you want the simpler sight.
+- **Range readout**, on by default. The range as a number beside the range circle
+  and the ground pipper.
+
+The funnel itself now sizes its walls to what the target is actually **showing**
+you rather than to its wingspan, so a head on target no longer asks you to fit a
+dimension that is not on screen.
+
+---
+
 ## Features
 
 - **Accurate lead.** The bullet's flight time is simulated against the game's own
   drag and gravity, not guessed from `distance ÷ muzzle velocity`. (See
-  [what's new in 1.1.0](./CHANGELOG.md) — this used to be wrong, and it mattered.)
+  [the changelog](./CHANGELOG.md), where 1.1.0 explains why this used to be wrong
+  and how much it mattered.)
 - **Bolted to the nose.** Free-look, TrackIR and head movement never drag the
   funnel around. It behaves like real combiner glass, not a screen overlay.
 - **Matches your HUD.** Takes its colour and transparency from your active HUD
@@ -89,7 +111,7 @@ Funnel stuck or missing after an aircraft swap? Press **F9** to rebuild it.
   actually locked, filling in its database from real game data as you fly.
 - **Predictive tracking** (optional) factors in a locked target's own movement,
   not just yours.
-- **Tweak everything live** in ConfigurationManager — no restarts.
+- **Tweak everything live** in ConfigurationManager - no restarts.
 
 ---
 
@@ -126,6 +148,7 @@ you're editing that by hand.
 | Filled range circle<br>`RangeDotFilled` | off | Solid disc instead of an outline ring. |
 | Range circle thickness<br>`RangeDotLineThickness` | 2 px | Set separately from the wall thickness. |
 | Hide with gear down<br>`HideWithGearDown` | on | Hides the funnel on approach, like the stock sight. |
+| Hide stock gun pip<br>`HideNativeBoresight` | on | Hides the game's grey gun dot. Turn it off to show the stock pip alongside the funnel. They disagree at longer ranges and the funnel is the correct one, see Known quirks. |
 
 ### Aiming
 
@@ -146,31 +169,30 @@ you're editing that by hand.
 | Reset overlay key<br>`ResetOverlayKey` | F9 | Rebuilds the funnel if it gets stuck. |
 
 <details>
-<summary><b>Advanced settings</b> (hidden behind the "Advanced settings" tickbox — you shouldn't need these)</summary>
+<summary><b>Advanced settings</b> (hidden behind the "Advanced settings" tickbox - you shouldn't need these)</summary>
 
 | Setting | Default | What it does |
 |---|---|---|
 | Debug logging<br>`DebugLogging` | off | Dumps turn rate and target state to the BepInEx log every ~2 s. For bug reports. |
-| Hide native crosshair<br>`HideNativeBoresight` | on | Hides the game's grey gun dot. Turn off to see both at once. |
 | Predictive strength<br>`PredictiveTrackingStrength` | 1.0 | How much a locked target's motion is blended in. |
 | Predictive min range<br>`PredictiveTrackingMinRange` | 300 m | Where predictive tracking starts fading in. Closer than this the reading is too noisy. |
 | Predictive max range<br>`PredictiveTrackingMaxRange` | 800 m | Where it reaches full strength. |
 | Funnel resolution<br>`FunnelResolution` | 50 | Points making up the curve. Higher is smoother, costs a little CPU. |
-| Ballistic sim steps<br>`BallisticSimulationSteps` | 40 | Steps used to simulate drag and gravity. 40 keeps lead error under ~2% at 1200 m. |
+| Ballistic sim steps<br>`BallisticSimulationSteps` | 40 | No longer an accuracy setting. The funnel steps its trajectory at the game's own physics rate, so it predicts the game's bullet exactly. This is only a safety ceiling. Leave it alone. |
 | Minimum turn rate<br>`MinTurnRate` | 0.01 rad/s | Below this the funnel uses a fallback axis so it doesn't collapse in level flight. |
 
 </details>
 
 > **Upgrading from 1.0.x?** Your settings carry over, with one exception:
 > `TurnRateSmoothing` moved sections and resets to the new 0.15 s default. That's
-> intentional — the old 0.35 s made the funnel lag behind hard pulls. You can
+> intentional - the old 0.35 s made the funnel lag behind hard pulls. You can
 > delete the now-empty `[Smoothing]` section from the `.cfg`.
 
 ---
 
 ## Known quirks
 
-- **The funnel and the game's own gun dot disagree at longer ranges — the funnel
+- **The funnel and the game's own gun dot disagree at longer ranges - the funnel
   is the correct one.** The stock dot works out lead using a bullet speed that
   ignores air resistance, so it asks for too little lead; at 1000 m with a heavy
   cannon that's roughly a quarter short. If you're used to shooting the stock
@@ -190,7 +212,7 @@ you're editing that by hand.
 dotnet build FunnelGunSightMod.csproj -c Release
 ```
 
-Set `GameDir` in `GamePath.props` to your Nuclear Option folder first — the one
+Set `GameDir` in `GamePath.props` to your Nuclear Option folder first - the one
 containing `NuclearOption.exe`.
 
 Architecture, ballistics math, and the reasoning behind the design decisions:
@@ -198,14 +220,6 @@ Architecture, ballistics math, and the reasoning behind the design decisions:
 
 ---
 
-## AI use
-
-I use an AI agent to help with coding, refactoring, asset modification, and authoring
-long bodies of text and lore.
-
-It raises the quality ceiling beyond what my own skills currently guarantee, while I
-learn and develop them. Every decision, every number, and everything that ships is mine.
-
 ## License
 
-MIT — see [LICENSE](./LICENSE).
+MIT - see [LICENSE](./LICENSE).
