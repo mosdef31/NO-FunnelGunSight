@@ -2,7 +2,7 @@
 
 ## 1.2.0
 
-### New: four sights instead of one, and they all work at once
+### New: Added more useful sights and options
 
 There is a new **Sights** section in the settings with an independent switch for
 each. Turning one on never turns another off.
@@ -15,29 +15,17 @@ each. Turning one on never turns another off.
   funnel's fifty. With a lock it uses the real range; without one it uses an
   assumed range you set.
 - **Range readout** (on by default). The range as a number beside the range
-  circle and the ground pipper, in hundreds of metres.
-
-### Changed: the ground sight's default look, and where its reading sits
-
-- **Segmented rings is now the default shape**, at **18 mrad** instead of the
-  plain ring and dot's 9 - the detailed shapes need the extra room.
-- **The range/target reading now sits to the left of the pipper**, clear of it
-  by a real margin, instead of crowding its right side.
+  circle and the ground pipper, in hundreds of meters.
 
 ### Changed: Adaptive is now the default wingspan mode
 
 The funnel resizes to the locked target's real wingspan instead of assuming one
 fixed number for every aircraft. Switch back to **Fixed** in the settings if you
-preferred the old behaviour.
-
-### Removed: the tracer line
-
-It never earned its place on the HUD. Ground attack sight, lead pipper and range
-readout stay.
+preferred the old behavior.
 
 ### Fixed: the funnel overlay came and went on some stations
 
-On a station where the HUD centre the funnel anchors to is inactive, the mod
+On a station where the HUD center the funnel anchors to is inactive, the mod
 retried twice a second for as long as you sat there, and the overlay appeared
 only on the rare frame the retry happened to land in a brief active window. It
 now backs off after a few quick tries and reports the state once instead of
@@ -60,7 +48,7 @@ wingspan at every aspect.
 
 ### Changed: the funnel settles more like a real gun sight
 
-Turn rate smoothing was 0.15 s. The real enhanced envelope sight this is modelled
+Turn rate smoothing was 0.15 s. The real enhanced envelope sight this is modeled
 on takes 0.5 to 1.5 s to settle after you change your plane of motion, so ours was
 three times faster than the fastest real one and it read as twitchy. The default
 is now **0.5 s** and the setting goes up to 1.5 s.
@@ -77,10 +65,9 @@ field, which is seeded from `WeaponInfo` when the gun wakes up and then drifts
 away from it in two ways:
 
 - A gun fed from a `GunAmmo` weapon mount has its whole `WeaponInfo` swapped for
-  the mount's afterwards, so it keeps firing at the speed the prefab was built
-  with while carrying different numbers. No stock aircraft gun uses such a mount,
-  which is why this never showed up on stock aircraft and did show up on modded
-  ones.
+  the mount's afterwards, so it keeps firing at its original speed while showing
+  different numbers. No stock aircraft gun uses such a mount, which is why this
+  never showed up on stock aircraft and did show up on modded ones.
 - A gun that is overheating has its muzzle velocity written down as the barrel
   heats.
 
@@ -142,7 +129,7 @@ used hardest. Only the points behind the camera are dropped now.
 ### Fixed: the funnel underled, badly
 
 Time of flight was being computed as if bullets flew through a vacuum. The
-ballistic simulation modelled drag correctly for the trajectory's shape, but the
+ballistic simulation modeled drag correctly for the trajectory's shape, but the
 integration ran for a fixed number of steps sized from the *drag-free* flight
 time, so it always ran out of steps before the bullet actually covered the
 distance - and reported the drag-free time anyway. Lead angle is directly
@@ -173,11 +160,11 @@ is the one that is right.
 The simulation only added the component of your aircraft's velocity along the
 gun axis. The game gives a bullet your entire velocity vector, so a shot fired
 with any angle of attack or sideslip also drifts sideways. That drift is now
-modelled.
+modeled.
 
 ### Changed: the funnel follows your HUD theme
 
-0.34 replaced the HUD's hardcoded colours with a theme system. The funnel now
+0.34 replaced the HUD's hardcoded colors with a theme system. The funnel now
 reads the same theme, so it matches the rest of your HUD - including custom
 themes - instead of sitting on top of it in a fixed green.
 
@@ -185,7 +172,7 @@ themes - instead of sitting on top of it in a fixed green.
 - Turn it off to go back to the manual `FunnelColor` / `FiringSolutionColor`
   settings, which are otherwise ignored.
 - **Opacity** now scales the theme's own alpha rather than replacing it, so you
-  can dim the funnel without breaking the colour match.
+  can dim the funnel without breaking the color match.
 
 ### Changed: the config menu is navigable
 

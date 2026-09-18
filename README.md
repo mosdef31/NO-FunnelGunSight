@@ -75,7 +75,7 @@ Funnel stuck or missing after an aircraft swap? Press **F9** to rebuild it.
 
 ---
 
-## New in 1.2.0: four sights, and they all work at once
+## New in 1.2.0: more useful sights and options
 
 The funnel is no longer the only thing this mod draws. There is a **Sights**
 section in the settings with an independent switch for each, and turning one on
@@ -104,7 +104,7 @@ dimension that is not on screen.
   and how much it mattered.)
 - **Bolted to the nose.** Free-look, TrackIR and head movement never drag the
   funnel around. It behaves like real combiner glass, not a screen overlay.
-- **Matches your HUD.** Takes its colour and transparency from your active HUD
+- **Matches your HUD.** Takes its color and transparency from your active HUD
   theme, custom themes included. Override it if you'd rather.
 - **Range circle** on the funnel for any designated or HUD-selected target.
 - **Learns aircraft sizes.** Adaptive mode sizes the funnel to whatever you've
@@ -135,12 +135,12 @@ you're editing that by hand.
 
 | Setting | Default | What it does |
 |---|---|---|
-| Match HUD theme<br>`FollowHudTheme` | on | Take colour + transparency from the game's HUD theme. Turn off to pick your own. |
-| Funnel colour<br>`FunnelColor` | green | Your own colour. Only used with *Match HUD theme* off. |
-| Opacity<br>`FunnelOpacity` | 1.0 | Dims the funnel. Works in both colour modes. |
+| Match HUD theme<br>`FollowHudTheme` | on | Take color + transparency from the game's HUD theme. Turn off to pick your own. |
+| Funnel color<br>`FunnelColor` | green | Your own color. Only used with *Match HUD theme* off. |
+| Opacity<br>`FunnelOpacity` | 1.0 | Dims the funnel. Works in both color modes. |
 | Flash on firing solution<br>`FlashOnFiringSolution` | on | Flash when the target is in the walls at the right range. |
-| Firing solution colour<br>`FiringSolutionColor` | white | Flash colour. Only used with *Match HUD theme* off. |
-| Show pipper<br>`ShowPipper` | on | The small cross at the funnel's centre. |
+| Firing solution color<br>`FiringSolutionColor` | white | Flash color. Only used with *Match HUD theme* off. |
+| Show pipper<br>`ShowPipper` | on | The small cross at the funnel's center. |
 | Pipper size<br>`PipperSize` | 8 px | How big that cross is. |
 | Line thickness<br>`FunnelLineThickness` | 2 px | Thicker walls if you lose sight of them in hard turns. |
 | Show range circle<br>`ShowRangeDot` | on | The circle marking a locked target's distance. |
@@ -148,7 +148,7 @@ you're editing that by hand.
 | Filled range circle<br>`RangeDotFilled` | off | Solid disc instead of an outline ring. |
 | Range circle thickness<br>`RangeDotLineThickness` | 2 px | Set separately from the wall thickness. |
 | Hide with gear down<br>`HideWithGearDown` | on | Hides the funnel on approach, like the stock sight. |
-| Hide stock gun pip<br>`HideNativeBoresight` | on | Hides the game's grey gun dot. Turn it off to show the stock pip alongside the funnel. They disagree at longer ranges and the funnel is the correct one, see Known quirks. |
+| Hide stock gun pip<br>`HideNativeBoresight` | on | Hides the game's gray gun dot. Turn it off to show the stock pip alongside the funnel. They disagree at longer ranges and the funnel is the correct one. |
 
 ### Aiming
 
@@ -173,7 +173,7 @@ you're editing that by hand.
 
 | Setting | Default | What it does |
 |---|---|---|
-| Debug logging<br>`DebugLogging` | off | Dumps turn rate and target state to the BepInEx log every ~2 s. For bug reports. |
+| Debug logging<br>`DebugLogging` | off | Writes turn rate and target state to the mod log every ~2 s. Only useful if someone asks you for it. |
 | Predictive strength<br>`PredictiveTrackingStrength` | 1.0 | How much a locked target's motion is blended in. |
 | Predictive min range<br>`PredictiveTrackingMinRange` | 300 m | Where predictive tracking starts fading in. Closer than this the reading is too noisy. |
 | Predictive max range<br>`PredictiveTrackingMaxRange` | 800 m | Where it reaches full strength. |
@@ -187,22 +187,6 @@ you're editing that by hand.
 > `TurnRateSmoothing` moved sections and resets to the new 0.15 s default. That's
 > intentional - the old 0.35 s made the funnel lag behind hard pulls. You can
 > delete the now-empty `[Smoothing]` section from the `.cfg`.
-
----
-
-## Known quirks
-
-- **The funnel and the game's own gun dot disagree at longer ranges - the funnel
-  is the correct one.** The stock dot works out lead using a bullet speed that
-  ignores air resistance, so it asks for too little lead; at 1000 m with a heavy
-  cannon that's roughly a quarter short. If you're used to shooting the stock
-  dot, the funnel will feel like it's leading too much. It isn't. Details in
-  [TECHNICAL.md](./TECHNICAL.md).
-- **Funnel curving the wrong way?** Turn off *Invert turn direction*. It's set
-  for the Firefly Companion FBW mod by default.
-- **Aircraft database starts empty.** `wingspans.json` fills itself in the first
-  time Adaptive mode meets each aircraft type. Nothing to enter by hand, and it
-  only ever grows.
 
 ---
 
